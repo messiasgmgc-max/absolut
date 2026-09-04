@@ -136,4 +136,6 @@ export interface StoreSettings {
   address: string;
   receipt_footer_text: string;
   thermal_printer_width: number;
+  access_pin?: string;
 }
+

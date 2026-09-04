@@ -3,6 +3,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import AuthGate from "@/components/AuthGate";
 
 export const metadata: Metadata = {
   title: "Absolut Parfum • Sistema de Gestão & Vendas de Luxo",
@@ -31,17 +32,20 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="min-h-screen bg-zinc-950 text-zinc-100 antialiased selection:bg-gold-500 selection:text-zinc-950">
-        <div className="flex min-h-screen flex-col">
-          <Header />
-          <div className="flex flex-1 overflow-hidden">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto bg-gradient-to-b from-zinc-950 via-zinc-900/40 to-zinc-950 p-3 sm:p-4 md:p-8 pb-24 md:pb-8">
-              {children}
-            </main>
+        <AuthGate>
+          <div className="flex min-h-screen flex-col">
+            <Header />
+            <div className="flex flex-1 overflow-hidden">
+              <Sidebar />
+              <main className="flex-1 overflow-y-auto bg-gradient-to-b from-zinc-950 via-zinc-900/40 to-zinc-950 p-3 sm:p-4 md:p-8 pb-24 md:pb-8">
+                {children}
+              </main>
+            </div>
+            <MobileNav />
           </div>
-          <MobileNav />
-        </div>
+        </AuthGate>
       </body>
     </html>
   );
 }
+

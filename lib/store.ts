@@ -37,15 +37,20 @@ export async function getProducts(): Promise<Product[]> {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (error) {
+        throw new Error('Falha de conexão com o banco de dados Supabase: ' + error.message);
+      }
+      if (data) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data));
         return data as Product[];
       }
-    } catch (err) {
-      console.warn('Erro ao carregar produtos do Supabase, usando local:', err);
+    } catch (err: any) {
+      console.error('Erro crítico ao carregar produtos do Supabase:', err);
+      throw err;
     }
   }
 
-  // Fallback LocalStorage
+  // Se Supabase não estiver configurado
   const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
   if (!saved) {
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
@@ -57,6 +62,7 @@ export async function getProducts(): Promise<Product[]> {
     return INITIAL_PRODUCTS;
   }
 }
+
 
 export async function saveProduct(product: Partial<Product>): Promise<Product> {
   const products = await getProducts();
@@ -95,10 +101,9 @@ export async function saveProduct(product: Partial<Product>): Promise<Product> {
   }
 
   if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from('products').upsert(updated);
-    } catch (err) {
-      console.warn('Erro ao salvar no Supabase:', err);
+    const { error } = await supabase.from('products').upsert(updated);
+    if (error) {
+      throw new Error('Falha ao sincronizar produto com o banco online Supabase: ' + error.message);
     }
   }
 
@@ -111,13 +116,13 @@ export async function deleteProduct(id: string): Promise<void> {
   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(filtered));
 
   if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from('products').delete().eq('id', id);
-    } catch (err) {
-      console.warn('Erro ao deletar do Supabase:', err);
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) {
+      throw new Error('Falha ao excluir produto no Supabase: ' + error.message);
     }
   }
 }
+
 
 export async function importProductsBatch(newItems: Partial<Product>[]): Promise<{ inserted: number; updated: number }> {
   const current = await getProducts();
@@ -172,15 +177,15 @@ export async function importProductsBatch(newItems: Partial<Product>[]): Promise
   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(list));
 
   if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from('products').upsert(list);
-    } catch (err) {
-      console.warn('Erro ao sincronizar lote com Supabase:', err);
+    const { error } = await supabase.from('products').upsert(list);
+    if (error) {
+      throw new Error('Falha ao sincronizar lote de produtos com o Supabase: ' + error.message);
     }
   }
 
   return { inserted, updated };
 }
+
 
 // ==========================================
 // FUNÇÕES DE VENDAS (PDV)
@@ -198,11 +203,16 @@ export async function getSales(): Promise<Sale[]> {
         `)
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (error) {
+        throw new Error('Falha de conexão com as vendas online no Supabase: ' + error.message);
+      }
+      if (data) {
+        localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(data));
         return data as Sale[];
       }
-    } catch (err) {
-      console.warn('Erro ao buscar vendas no Supabase:', err);
+    } catch (err: any) {
+      console.error('Erro crítico ao buscar vendas no Supabase:', err);
+      throw err;
     }
   }
 
@@ -231,11 +241,28 @@ export async function createSale(saleData: Omit<Sale, 'id' | 'code' | 'created_a
     created_at: new Date().toISOString(),
   };
 
-  // 1. Salvar venda
+  // 1. Salvar venda no Supabase (online obrigatório)
+  if (isSupabaseConfigured && supabase) {
+    const { items, ...saleRecord } = newSale;
+    const { error: saleErr } = await supabase.from('sales').insert([saleRecord]);
+    if (saleErr) {
+      throw new Error('Falha ao registrar venda online no Supabase: ' + saleErr.message);
+    }
+    const itemsToInsert = items.map(it => ({
+      ...it,
+      sale_id: newSale.id,
+    }));
+    const { error: itemsErr } = await supabase.from('sale_items').insert(itemsToInsert);
+    if (itemsErr) {
+      console.warn('Erro ao inserir itens da venda no Supabase:', itemsErr);
+    }
+  }
+
+  // 2. Salvar venda local
   const updatedSales = [newSale, ...sales];
   localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(updatedSales));
 
-  // 2. Dar baixa no estoque de cada produto vendido
+  // 3. Dar baixa no estoque de cada produto vendido
   const products = await getProducts();
   const movements: InventoryMovement[] = [];
 
@@ -259,16 +286,23 @@ export async function createSale(saleData: Omit<Sale, 'id' | 'code' | 'created_a
         user_name: newSale.seller_name || 'Vendedor',
         created_at: new Date().toISOString(),
       });
+
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('products').update({ stock_quantity: nextStock }).eq('id', item.product_id);
+      }
     }
   }
 
   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
 
-  // 3. Salvar movimentações de auditoria
+  // 4. Salvar movimentações de auditoria
   const existingMovs = await getInventoryMovements();
   localStorage.setItem(STORAGE_KEYS.MOVEMENTS, JSON.stringify([...movements, ...existingMovs]));
+  if (isSupabaseConfigured && supabase && movements.length > 0) {
+    await supabase.from('inventory_movements').insert(movements);
+  }
 
-  // 4. Se o cliente for cadastrado, atualizar estatísticas
+  // 5. Se o cliente for cadastrado, atualizar estatísticas
   if (newSale.customer_id) {
     const customers = await getCustomers();
     const custIndex = customers.findIndex(c => c.id === newSale.customer_id);
@@ -276,21 +310,13 @@ export async function createSale(saleData: Omit<Sale, 'id' | 'code' | 'created_a
       customers[custIndex].total_spent += newSale.total;
       customers[custIndex].total_purchases += 1;
       localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
-    }
-  }
 
-  // Se Supabase estiver conectado
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { items, ...saleRecord } = newSale;
-      await supabase.from('sales').insert([saleRecord]);
-      const itemsToInsert = items.map(it => ({
-        ...it,
-        sale_id: newSale.id,
-      }));
-      await supabase.from('sale_items').insert(itemsToInsert);
-    } catch (err) {
-      console.warn('Erro ao registrar venda no Supabase:', err);
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('customers').update({
+          total_spent: customers[custIndex].total_spent,
+          total_purchases: customers[custIndex].total_purchases
+        }).eq('id', newSale.customer_id);
+      }
     }
   }
 
@@ -326,6 +352,10 @@ export async function deleteSale(id: string): Promise<void> {
         user_name: 'Administrador',
         created_at: new Date().toISOString(),
       });
+
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('products').update({ stock_quantity: nextStock }).eq('id', item.product_id);
+      }
     }
   }
 
@@ -334,12 +364,25 @@ export async function deleteSale(id: string): Promise<void> {
   // 2. Gravar auditoria do estorno
   const existingMovs = await getInventoryMovements();
   localStorage.setItem(STORAGE_KEYS.MOVEMENTS, JSON.stringify([...movements, ...existingMovs]));
+  if (isSupabaseConfigured && supabase && movements.length > 0) {
+    await supabase.from('inventory_movements').insert(movements);
+  }
 
-  // 3. Remover a venda
+  // 3. Remover a venda no Supabase (online obrigatório)
+  if (isSupabaseConfigured && supabase) {
+    const { error: delItemsErr } = await supabase.from('sale_items').delete().eq('sale_id', id);
+    if (delItemsErr) console.warn('Erro ao excluir sale_items no Supabase:', delItemsErr);
+    const { error: delSaleErr } = await supabase.from('sales').delete().eq('id', id);
+    if (delSaleErr) {
+      throw new Error('Falha ao excluir venda no banco online Supabase: ' + delSaleErr.message);
+    }
+  }
+
+  // 4. Remover a venda local
   const updatedSales = sales.filter(s => s.id !== id);
   localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(updatedSales));
 
-  // 4. Se o cliente pontuou, estornar total_spent
+  // 5. Se o cliente pontuou, estornar total_spent
   if (saleToDelete.customer_id) {
     const customers = await getCustomers();
     const custIndex = customers.findIndex(c => c.id === saleToDelete.customer_id);
@@ -347,16 +390,13 @@ export async function deleteSale(id: string): Promise<void> {
       customers[custIndex].total_spent = Math.max(0, customers[custIndex].total_spent - saleToDelete.total);
       customers[custIndex].total_purchases = Math.max(0, customers[custIndex].total_purchases - 1);
       localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
-    }
-  }
 
-  // 5. Supabase sync se configurado
-  if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from('sale_items').delete().eq('sale_id', id);
-      await supabase.from('sales').delete().eq('id', id);
-    } catch (err) {
-      console.warn('Erro ao excluir venda no Supabase:', err);
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('customers').update({
+          total_spent: customers[custIndex].total_spent,
+          total_purchases: customers[custIndex].total_purchases
+        }).eq('id', saleToDelete.customer_id);
+      }
     }
   }
 }
@@ -373,20 +413,20 @@ export async function updateSale(id: string, updatedFields: Partial<Sale>): Prom
     ...updatedFields,
   };
 
-  sales[index] = updatedSale;
-  localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
-
   if (isSupabaseConfigured && supabase) {
-    try {
-      const { items, ...saleRecord } = updatedSale;
-      await supabase.from('sales').update(saleRecord).eq('id', id);
-    } catch (err) {
-      console.warn('Erro ao atualizar venda no Supabase:', err);
+    const { items, ...saleRecord } = updatedSale;
+    const { error } = await supabase.from('sales').update(saleRecord).eq('id', id);
+    if (error) {
+      throw new Error('Falha ao atualizar venda no banco online Supabase: ' + error.message);
     }
   }
 
+  sales[index] = updatedSale;
+  localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+
   return updatedSale;
 }
+
 
 
 // ==========================================
@@ -463,6 +503,22 @@ export async function addInventoryMovement(params: {
 export async function getCardMachines(): Promise<CardMachineRate[]> {
   if (typeof window === 'undefined') return INITIAL_CARD_MACHINES;
 
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('card_machines')
+        .select('*')
+        .order('name');
+
+      if (!error && data && data.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.CARD_MACHINES, JSON.stringify(data));
+        return data as CardMachineRate[];
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar taxas de cartão do Supabase:', err);
+    }
+  }
+
   const saved = localStorage.getItem(STORAGE_KEYS.CARD_MACHINES);
   if (!saved) {
     localStorage.setItem(STORAGE_KEYS.CARD_MACHINES, JSON.stringify(INITIAL_CARD_MACHINES));
@@ -483,6 +539,13 @@ export async function saveCardMachine(machine: CardMachineRate): Promise<void> {
     : [...machines, machine];
 
   localStorage.setItem(STORAGE_KEYS.CARD_MACHINES, JSON.stringify(list));
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from('card_machines').upsert(machine);
+    if (error) {
+      throw new Error('Falha ao salvar taxas da maquininha no Supabase: ' + error.message);
+    }
+  }
 }
 
 // ==========================================
@@ -490,6 +553,22 @@ export async function saveCardMachine(machine: CardMachineRate): Promise<void> {
 // ==========================================
 export async function getCustomers(): Promise<Customer[]> {
   if (typeof window === 'undefined') return INITIAL_CUSTOMERS;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('name');
+
+      if (!error && data && data.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(data));
+        return data as Customer[];
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar clientes do Supabase:', err);
+    }
+  }
 
   const saved = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
   if (!saved) {
@@ -531,14 +610,58 @@ export async function saveCustomer(customer: Partial<Customer>): Promise<Custome
     localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(list));
   }
 
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from('customers').upsert(updated);
+    if (error) {
+      throw new Error('Falha ao salvar cliente no Supabase: ' + error.message);
+    }
+  }
+
   return updated;
 }
 
 // ==========================================
-// CONFIGURAÇÕES DA LOJA
+// CONFIGURAÇÕES DA LOJA & SENHA MESTRE
 // ==========================================
 export async function getStoreSettings(): Promise<StoreSettings> {
   if (typeof window === 'undefined') return INITIAL_SETTINGS;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('store_settings')
+        .select('*')
+        .eq('id', 'default')
+        .single();
+
+      if (!error && data) {
+        let masterPin = '191215';
+        let tagline = data.brand_tagline || 'Perfumaria de Luxo & Fracionados Exclusivos';
+
+        // Suporte à senha mestre embutida no JSON ou campo access_pin
+        if (data.access_pin) {
+          masterPin = data.access_pin;
+        } else if (tagline.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(tagline);
+            masterPin = parsed.master_pin || masterPin;
+            tagline = parsed.tagline || tagline;
+          } catch (e) {}
+        }
+
+        const settingsResult: StoreSettings = {
+          ...data,
+          brand_tagline: tagline,
+          access_pin: masterPin,
+        };
+
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settingsResult));
+        return settingsResult;
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar configurações do Supabase:', err);
+    }
+  }
 
   const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
   if (!saved) {
@@ -556,8 +679,68 @@ export async function saveStoreSettings(settings: Partial<StoreSettings>): Promi
   const current = await getStoreSettings();
   const updated: StoreSettings = { ...current, ...settings };
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+
+  if (isSupabaseConfigured && supabase) {
+    const masterPin = updated.access_pin || '191215';
+    const rowToSave: any = {
+      id: 'default',
+      store_name: updated.store_name,
+      brand_tagline: JSON.stringify({
+        tagline: updated.brand_tagline,
+        master_pin: masterPin,
+      }),
+      cnpj: updated.cnpj,
+      phone: updated.phone,
+      email: updated.email,
+      pix_key: updated.pix_key,
+      pix_key_type: updated.pix_key_type,
+      address: updated.address,
+      receipt_footer_text: updated.receipt_footer_text,
+      thermal_printer_width: updated.thermal_printer_width,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('store_settings').upsert(rowToSave);
+    if (error) {
+      console.warn('Aviso ao sincronizar store_settings com Supabase:', error.message);
+    }
+  }
+
   return updated;
 }
+
+// Obter a senha mestre configurada na Supabase
+export async function getMasterPinFromSupabase(): Promise<string> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('store_settings')
+        .select('brand_tagline')
+        .eq('id', 'default')
+        .single();
+
+      if (!error && data?.brand_tagline) {
+        const raw = data.brand_tagline;
+        if (raw.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed.master_pin) return String(parsed.master_pin);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar senha mestre no Supabase:', e);
+    }
+  }
+  return '191215'; // Senha mestre padrão
+}
+
+// Validar se o PIN informado corresponde ao PIN cadastrado no Supabase
+export async function verifyMasterPin(pin: string): Promise<boolean> {
+  const actualPin = await getMasterPinFromSupabase();
+  return String(pin).trim() === actualPin.trim();
+}
+
 
 // ==========================================
 // CÁLCULO DE KPIS & MÉTRICAS

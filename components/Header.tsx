@@ -9,8 +9,10 @@ import {
   Database, 
   PlusCircle, 
   Bell, 
-  Store
+  Store,
+  Lock
 } from 'lucide-react';
+
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { getProducts } from '@/lib/store';
 
@@ -85,7 +87,21 @@ export default function Header() {
           <ShoppingCart className="h-4 w-4" />
           <span>Frente de Caixa (PDV)</span>
         </Link>
+
+        {/* Botão Bloquear / Sair */}
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.removeItem('absolut_auth_token_v1');
+            window.location.reload();
+          }}
+          title="Bloquear painel de acesso"
+          className="flex items-center justify-center h-8 w-8 rounded-lg border border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600 hover:text-rose-400 transition-colors"
+        >
+          <Lock className="h-3.5 w-3.5" />
+        </button>
       </div>
     </header>
+
   );
 }

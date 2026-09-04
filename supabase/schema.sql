@@ -124,11 +124,12 @@ CREATE TABLE IF NOT EXISTS public.card_machines (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 8. CONFIGURAÇÕES DA LOJA ABSOLUT PARFUM
+-- 8. CONFIGURAÇÕES DA LOJA ABSOLUT PARFUM & SENHA MESTRE
 CREATE TABLE IF NOT EXISTS public.store_settings (
     id VARCHAR(50) PRIMARY KEY DEFAULT 'default',
     store_name VARCHAR(100) DEFAULT 'Absolut Parfum',
-    brand_tagline VARCHAR(150) DEFAULT 'Perfumaria de Luxo & Fracionados Exclusivos',
+    brand_tagline TEXT DEFAULT '{"tagline":"Perfumaria de Luxo & Fracionados Exclusivos","master_pin":"191215"}',
+    access_pin VARCHAR(20) DEFAULT '191215',
     cnpj VARCHAR(30) DEFAULT '00.000.000/0001-00',
     phone VARCHAR(30) DEFAULT '(11) 99999-9999',
     email VARCHAR(100) DEFAULT 'contato@absolutparfum.com.br',
@@ -140,6 +141,9 @@ CREATE TABLE IF NOT EXISTS public.store_settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- SE A TABELA JÁ EXISTIR, ADICIONA A COLUNA DE SENHA MESTRE SE NÃO EXISTIR
+ALTER TABLE public.store_settings ADD COLUMN IF NOT EXISTS access_pin VARCHAR(20) DEFAULT '191215';
+
 -- DADOS INICIAIS DE MAQUININHAS DE CARTÃO
 INSERT INTO public.card_machines (name, debit_rate, credit_1x, credit_2x, credit_3x, credit_4x, credit_5x, credit_6x, credit_7x, credit_8x, credit_9x, credit_10x, credit_11x, credit_12x, is_default)
 VALUES 
@@ -149,10 +153,12 @@ VALUES
 ('Mercado Pago (Point)', 1.68, 3.15, 5.41, 6.70, 7.96, 9.20, 10.42, 11.61, 12.79, 13.94, 15.08, 16.19, 17.28, false)
 ON CONFLICT (name) DO NOTHING;
 
--- CONFIGURAÇÃO INICIAL DA LOJA
-INSERT INTO public.store_settings (id, store_name, brand_tagline, phone, pix_key, receipt_footer_text)
-VALUES ('default', 'Absolut Parfum', 'Perfumaria de Luxo & Fracionados Exclusivos', '(11) 99999-9999', 'pix@absolutparfum.com.br', 'Perfumes 100% Originais. Obrigado por escolher a Absolut Parfum!')
-ON CONFLICT (id) DO NOTHING;
+-- CONFIGURAÇÃO INICIAL DA LOJA COM SENHA MESTRE (191215)
+INSERT INTO public.store_settings (id, store_name, brand_tagline, access_pin, phone, pix_key, receipt_footer_text)
+VALUES ('default', 'Absolut Parfum', '{"tagline":"Perfumaria de Luxo & Fracionados Exclusivos","master_pin":"191215"}', '191215', '(11) 99999-9999', 'pix@absolutparfum.com.br', 'Perfumes 100% Originais. Obrigado por escolher a Absolut Parfum!')
+ON CONFLICT (id) DO UPDATE SET 
+  access_pin = COALESCE(public.store_settings.access_pin, '191215'),
+  brand_tagline = '{"tagline":"Perfumaria de Luxo & Fracionados Exclusivos","master_pin":"191215"}';
 
 -- HABILITAR ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -176,3 +182,4 @@ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
+

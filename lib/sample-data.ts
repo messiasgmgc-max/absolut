@@ -7653,6 +7653,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   address: 'Shopping Cidade Jardim - São Paulo / SP',
   receipt_footer_text: 'Perfumes 100% Originais com Selo de Procedência Absolut. Agradecemos a sua preferência!',
   thermal_printer_width: 80,
+  access_pin: '191215',
 };
 
 export const INITIAL_SALES: Sale[] = [
