@@ -14,13 +14,15 @@ import {
   Users, 
   FileText,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  QrCode
 } from 'lucide-react';
 
 const MENU_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/pdv', label: 'Frente de Caixa (PDV)', icon: ShoppingCart, highlight: true },
   { href: '/produtos', label: 'Catálogo de Perfumes', icon: Sparkles },
+  { href: '/etiquetas', label: 'Etiquetas & QR Code', icon: QrCode, highlight: true },
   { href: '/produtos/importar', label: 'Importar Planilhas', icon: FileSpreadsheet },
   { href: '/estoque', label: 'Controle de Estoque', icon: Boxes },
   { href: '/vendas', label: 'Histórico de Vendas', icon: ReceiptText },
@@ -28,6 +30,7 @@ const MENU_ITEMS = [
   { href: '/clientes', label: 'Clientes & CRM', icon: Users },
   { href: '/notas-fiscais', label: 'Emissão Fiscal / NF-e', icon: FileText },
 ];
+
 
 export default function Sidebar() {
   const pathname = usePathname();

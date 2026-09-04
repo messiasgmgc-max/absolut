@@ -55,12 +55,13 @@ body {
   border: 1px solid rgba(212, 175, 55, 0.25);
 }
 
-/* Estilos Especiais para Impressão de Cupom Térmico (80mm / 58mm) e Recibo A4 */
+/* Estilos Especiais para Impressão de Cupom Térmico (80mm / 58mm), Recibo A4 e Etiquetas Térmicas (LT42D / 3 Colunas) */
 @media print {
   body * {
     visibility: hidden;
   }
-  .printable-receipt, .printable-receipt * {
+  .printable-receipt, .printable-receipt *,
+  .printable-labels, .printable-labels * {
     visibility: visible;
   }
   .printable-receipt {
@@ -71,7 +72,18 @@ body {
     color: black !important;
     background: white !important;
   }
+  .printable-labels {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: black !important;
+    background: white !important;
+  }
   .no-print {
     display: none !important;
   }
 }
+

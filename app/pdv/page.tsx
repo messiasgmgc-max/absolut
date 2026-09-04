@@ -21,6 +21,7 @@ import {
   Copy,
   Check
 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { Product, Customer, StoreSettings, PaymentMethod, Sale, SaleItem } from '@/lib/types';
 import { getProducts, getCustomers, getStoreSettings, getCardMachines, createSale } from '@/lib/store';
 import ReceiptModal from '@/components/ReceiptModal';
@@ -31,6 +32,16 @@ interface CartItem extends SaleItem {
 }
 
 export default function PDVPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Carregando Frente de Caixa...</div>}>
+      <PDVContent />
+    </React.Suspense>
+  );
+}
+
+function PDVContent() {
+  const searchParams = useSearchParams();
+  const addSkuParam = searchParams.get('addSku');
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
@@ -64,17 +75,26 @@ export default function PDVPage() {
       getStoreSettings(),
       getCardMachines(),
     ]);
-    setProducts(pList.filter(p => p.active));
+    const activeProds = pList.filter(p => p.active);
+    setProducts(activeProds);
     setCustomers(cList);
     setSettings(sSet);
     if (machines.length > 0) {
       setSelectedMachine(machines[0].name);
     }
+
+    // Se houver addSku na URL vindo das Etiquetas / QR Code, adiciona direto
+    if (addSkuParam) {
+      const target = activeProds.find(p => (p.sku && p.sku.toLowerCase() === addSkuParam.toLowerCase()) || p.id === addSkuParam);
+      if (target) {
+        addToCart(target);
+      }
+    }
   };
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [addSkuParam]);
 
   // Adicionar item ao carrinho
   const addToCart = (product: Product) => {
