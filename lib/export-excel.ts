@@ -96,6 +96,33 @@ export function exportProductsToExcel(products: Product[]) {
   XLSX.writeFile(wb, `catalogo_absolut_parfum_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
+// Exporta planilha formatada pronta para alteração rápida de estoque e reimportação
+export function exportCurrentCatalogForStockUpdate(products: Product[]) {
+  const data = products.map(p => ({
+    'Nome da Fragrância': p.name,
+    'Marca': p.brand,
+    'Concentração': p.concentration,
+    'Volumetria (ml)': p.volume_ml,
+    'Família Olfativa': p.olfactory_family,
+    'Gênero': p.gender,
+    'SKU': p.sku,
+    'Código de Barras (EAN)': p.barcode,
+    'Preço de Custo (R$)': p.cost_price,
+    'Preço de Venda (R$)': p.sale_price,
+    'Estoque Inicial': p.stock_quantity, // Coluna que o usuário altera e o importador reconhece
+    'Estoque Mínimo': p.min_stock,
+    'NCM': p.ncm || '3303.00.10',
+    'URL da Imagem': p.image_url || '',
+    'Descrição': p.description || ''
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Atualizar Estoque');
+  XLSX.writeFile(wb, `estoque_absolut_parfum_para_editar_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+
 // =======================================================
 // EXPORTAR VENDAS PARA EXCEL
 // =======================================================

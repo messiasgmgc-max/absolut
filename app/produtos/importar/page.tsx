@@ -15,17 +15,31 @@ import {
   PackagePlus,
   RefreshCw
 } from 'lucide-react';
-import { downloadProductTemplate, parseUploadedFile } from '@/lib/export-excel';
-import { importProductsBatch } from '@/lib/store';
+import { downloadProductTemplate, parseUploadedFile, exportCurrentCatalogForStockUpdate } from '@/lib/export-excel';
+import { importProductsBatch, getProducts } from '@/lib/store';
 import { Product } from '@/lib/types';
 
 export default function ImportProductsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<Partial<Product>[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [result, setResult] = useState<{ inserted: number; updated: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportCurrentStock = async () => {
+    setIsExporting(true);
+    try {
+      const prods = await getProducts();
+      exportCurrentCatalogForStockUpdate(prods);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Erro ao gerar planilha com produtos atuais.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleFileChange = async (selectedFile: File) => {
     setErrorMsg(null);
@@ -74,7 +88,7 @@ export default function ImportProductsPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <Link
             href="/produtos"
@@ -85,36 +99,66 @@ export default function ImportProductsPage() {
           </Link>
           <div className="flex items-center gap-2 text-gold-400">
             <Sparkles className="h-4 w-4" />
-            <span className="text-xs font-bold uppercase tracking-widest">Importação em Massa</span>
+            <span className="text-xs font-bold uppercase tracking-widest">Importação & Atualização em Massa</span>
           </div>
           <h1 className="text-2xl font-black text-zinc-100">
-            Importar Produtos via Excel ou CSV
+            Importar & Atualizar Estoque via Planilha
           </h1>
           <p className="text-xs text-zinc-400">
-            Cadastre dezenas ou centenas de fragrâncias de uma única vez a partir da sua planilha de fornecedor ou estoque.
+            Exporte o catálogo atual para alterar as quantidades em lote, ou envie uma nova planilha de fornecedor.
           </p>
         </div>
 
         {/* Botão para Baixar Planilha Modelo */}
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => downloadProductTemplate('xlsx')}
-            className="flex items-center gap-2 rounded-xl border border-gold-500/40 bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-gold-300 hover:bg-gold-500/10 transition-all"
+            className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-all"
           >
-            <Download className="h-4 w-4 text-gold-400" />
-            <span>Baixar Modelo Excel (.xlsx)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => downloadProductTemplate('csv')}
-            className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 transition-all"
-          >
-            <Download className="h-4 w-4 text-emerald-400" />
-            <span>Modelo CSV</span>
+            <Download className="h-4 w-4 text-zinc-400" />
+            <span>Modelo Vazio (XLSX)</span>
           </button>
         </div>
       </div>
+
+      {/* CARD DESTAQUE: EXPORTAR PLANILHA ATUAL PARA ALTERAR ESTOQUE */}
+      <div className="rounded-2xl border border-gold-500/40 bg-gradient-to-r from-gold-950/20 via-zinc-900 to-zinc-900/90 p-5 shadow-lg relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-gold-400 text-xs font-bold uppercase tracking-wider">
+              <FileSpreadsheet className="h-4 w-4" />
+              <span>Atualização Rápida de Estoque</span>
+            </div>
+            <h2 className="text-base font-bold text-zinc-100">
+              Exportar Planilha Atual dos Produtos para Ajustar Estoque
+            </h2>
+            <p className="text-xs text-zinc-400 max-w-xl">
+              Baixe a planilha com todos os <b>perfumes cadastrados atualmente</b> (SKU, Nome, Preços e Quantidades). Abra no Excel, altere a coluna <b>Estoque Inicial</b> com os novos valores e faça o upload abaixo. O sistema atualiza tudo automaticamente!
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExportCurrentStock}
+            disabled={isExporting}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gold-500 px-5 py-3 text-xs font-bold text-zinc-950 shadow-md shadow-gold-500/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {isExporting ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>Gerando Arquivo...</span>
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                <span>Baixar Planilha de Produtos Atual (.xlsx)</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
 
       {/* Alerta de Sucesso após Importar */}
       {result && (

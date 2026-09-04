@@ -297,6 +297,98 @@ export async function createSale(saleData: Omit<Sale, 'id' | 'code' | 'created_a
   return newSale;
 }
 
+export async function deleteSale(id: string): Promise<void> {
+  const sales = await getSales();
+  const saleToDelete = sales.find(s => s.id === id);
+  if (!saleToDelete) return;
+
+  // 1. Estornar estoque dos itens vendidos de volta ao produto
+  const products = await getProducts();
+  const movements: InventoryMovement[] = [];
+
+  for (const item of saleToDelete.items) {
+    const prodIndex = products.findIndex(p => p.id === item.product_id);
+    if (prodIndex >= 0) {
+      const prev = products[prodIndex].stock_quantity;
+      const nextStock = prev + item.quantity;
+      products[prodIndex].stock_quantity = nextStock;
+
+      movements.push({
+        id: 'mov-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
+        product_id: item.product_id,
+        product_name: item.product_name,
+        type: 'ENTRADA',
+        quantity: item.quantity,
+        previous_stock: prev,
+        new_stock: nextStock,
+        reason: `Exclusão/Cancelamento da Venda ${saleToDelete.code}`,
+        reference_id: saleToDelete.id,
+        user_name: 'Administrador',
+        created_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+
+  // 2. Gravar auditoria do estorno
+  const existingMovs = await getInventoryMovements();
+  localStorage.setItem(STORAGE_KEYS.MOVEMENTS, JSON.stringify([...movements, ...existingMovs]));
+
+  // 3. Remover a venda
+  const updatedSales = sales.filter(s => s.id !== id);
+  localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(updatedSales));
+
+  // 4. Se o cliente pontuou, estornar total_spent
+  if (saleToDelete.customer_id) {
+    const customers = await getCustomers();
+    const custIndex = customers.findIndex(c => c.id === saleToDelete.customer_id);
+    if (custIndex >= 0) {
+      customers[custIndex].total_spent = Math.max(0, customers[custIndex].total_spent - saleToDelete.total);
+      customers[custIndex].total_purchases = Math.max(0, customers[custIndex].total_purchases - 1);
+      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+    }
+  }
+
+  // 5. Supabase sync se configurado
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('sale_items').delete().eq('sale_id', id);
+      await supabase.from('sales').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Erro ao excluir venda no Supabase:', err);
+    }
+  }
+}
+
+export async function updateSale(id: string, updatedFields: Partial<Sale>): Promise<Sale> {
+  const sales = await getSales();
+  const index = sales.findIndex(s => s.id === id);
+  if (index < 0) {
+    throw new Error('Venda não encontrada');
+  }
+
+  const updatedSale: Sale = {
+    ...sales[index],
+    ...updatedFields,
+  };
+
+  sales[index] = updatedSale;
+  localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { items, ...saleRecord } = updatedSale;
+      await supabase.from('sales').update(saleRecord).eq('id', id);
+    } catch (err) {
+      console.warn('Erro ao atualizar venda no Supabase:', err);
+    }
+  }
+
+  return updatedSale;
+}
+
+
 // ==========================================
 // MOVIMENTAÇÕES DE ESTOQUE
 // ==========================================
