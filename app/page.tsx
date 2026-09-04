@@ -55,7 +55,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Banner de Boas-Vindas */}
-      <div className="relative overflow-hidden rounded-2xl border border-gold-500/30 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 p-6 md:p-8 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl border border-gold-500/30 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 p-4 sm:p-6 md:p-8 shadow-2xl">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-gold-500/10 blur-3xl pointer-events-none" />
         
         <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

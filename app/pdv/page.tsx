@@ -335,7 +335,7 @@ export default function PDVPage() {
         {/* =================================================== */}
         {/* COLUNA DIREITA: CARRINHO & CHECKOUT (5 colunas) */}
         {/* =================================================== */}
-        <div className="space-y-4 lg:col-span-5">
+        <div id="checkout-panel" className="space-y-4 lg:col-span-5">
           <div className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/90 shadow-2xl overflow-hidden">
             
             {/* Topo do Carrinho */}
@@ -632,6 +632,38 @@ export default function PDVPage() {
         </div>
 
       </div>
+
+      {/* Barra Flutuante Mobile de Carrinho para iPhone 16 Pro Max e S24 Ultra */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-20 left-3 right-3 z-30 block lg:hidden animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <button
+            type="button"
+            onClick={() => {
+              document.getElementById('checkout-panel')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="w-full flex items-center justify-between rounded-2xl bg-gradient-to-r from-gold-500 via-gold-400 to-amber-500 p-3.5 text-zinc-950 shadow-2xl shadow-gold-500/40 ring-2 ring-gold-300/60 active:scale-98 transition-all"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-950 text-gold-400 font-black text-xs">
+                {cart.reduce((a, b) => a + b.quantity, 0)}
+              </div>
+              <div className="text-left">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-900 leading-tight">
+                  Carrinho Aberto
+                </span>
+                <span className="block text-sm font-black font-mono leading-tight">
+                  R$ {total.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 text-xs font-black uppercase tracking-wider bg-zinc-950/15 px-3 py-1.5 rounded-xl">
+              <span>Finalizar</span>
+              <span>➔</span>
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* Modal de Simulação de Taxas (quando acionado pelo botão no PDV) */}
       {showSimulatorModal && (

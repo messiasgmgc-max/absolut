@@ -42,17 +42,6 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* Badge de status do Supabase */}
-        <div className="hidden items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-300 sm:flex">
-          <Database className={`h-3.5 w-3.5 ${isSupabaseConfigured ? 'text-emerald-400' : 'text-amber-400'}`} />
-          <span>
-            {isSupabaseConfigured ? (
-              <span className="text-emerald-400 font-medium">Supabase Conectado</span>
-            ) : (
-              <span className="text-amber-400/90 font-medium">Modo Local & Híbrido</span>
-            )}
-          </span>
-        </div>
       </div>
 
       {/* Direita: Ações Rápidas */}
